@@ -127,7 +127,7 @@ def compute_loss(p, targets, model):  # predictions, targets, model
 def build_targets(p, targets, model):
     nt = targets.shape[0]  # number of anchors, targets
     tcls, tbox, indices, anch = [], [], [], []
-    gain = torch.ones(6, device=targets.device)  # normalized to gridspace gain
+    gain = torch.ones(6, device=targets.device).long()  # normalized to gridspace gain
     off = torch.tensor([[1, 0], [0, 1], [-1, 0], [0, -1]], device=targets.device).float()  # overlap offsets
 
     g = 0.5  # offset
