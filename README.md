@@ -130,8 +130,9 @@ For using single GPUs for training
 
 ```
 # yolov4-p5
-torchrun --nproc_per_node 1 train.py --batch-size 6 --img 896 896 --data coco.yaml --cfg yolov4-p5.yaml --weights '' --sync-bn --device 0 --name yolov4-p5
-torchrun --nproc_per_node 1 train.py --batch-size 6 --img 896 896 --data coco.yaml --cfg yolov4-p5.yaml --weights 'runs/exp0_yolov4-p5/weights/last_298.pt' --sync-bn --device 0 --name yolov4-p5-tune --hyp 'data/hyp.finetune.yaml' --epochs 450 --resume
+python train.py --batch-size 6 --img 896 896 --data coco128.yaml --cfg yolov4-p5.yaml --weights '' --device 0 --name yolov4-p5
+
+python train.py --batch-size 6 --img 896 896 --data coco.yaml --cfg yolov4-p5.yaml --weights 'runs/exp0_yolov4-p5/weights/last_298.pt' --sync-bn --device 0 --name yolov4-p5-tune --hyp 'data/hyp.finetune.yaml' --epochs 450 --resume
 ```
 
 If your training process stucks, it due to bugs of the python.
@@ -139,7 +140,7 @@ Just `Ctrl+C` to stop training and resume training by:
 
 ```
 # yolov4-p5
-torchrun --nproc_per_node 4 train.py --batch-size 64 --img 896 896 --data coco.yaml --cfg yolov4-p5.yaml --weights 'runs/exp0_yolov4-p5/weights/last.pt' --sync-bn --device 0,1,2,3 --name yolov4-p5 --resume
+python train.py --batch-size 4 --img 896 896 --data coco128.yaml --cfg yolov4-p5.yaml --weights 'runs/exp0_yolov4-p5/weights/last.pt' --device 0 --name yolov4-p5 --resume
 ```
 
 ## Citation
