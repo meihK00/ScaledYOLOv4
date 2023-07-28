@@ -257,8 +257,7 @@ def test(data,
         maps[c] = ap[i]
     return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t, results_per_class
 
-
-if __name__ == '__main__':
+def parse_opt():
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--weights', nargs='+', type=str, default='yolov4-p5.pt', help='model.pt path(s)')
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='*.data path')
@@ -278,7 +277,9 @@ if __name__ == '__main__':
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
     print(opt)
+    return opt
 
+def main(opt):
     if opt.task in ['val', 'test']:  # run normally
         test(opt.data,
              opt.weights,
@@ -303,3 +304,7 @@ if __name__ == '__main__':
             np.savetxt(f, y, fmt='%10.4g')  # save
         os.system('zip -r study.zip study_*.txt')
         # plot_study_txt(f, x)  # plot
+
+if __name__ == '__main__':
+    opt = parse_opt()
+    main(opt)
