@@ -25,7 +25,7 @@ from utils.general import (
     check_img_size, torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors,
     labels_to_image_weights, compute_loss, plot_images, fitness, strip_optimizer, plot_results,
     get_latest_run, check_git_status, check_file, increment_dir, print_mutation, plot_evolution)
-from utils.google_utils import attempt_download
+from utils.google_utils import attempt_download_github
 from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
 
@@ -61,8 +61,8 @@ def train(hyp, opt, device, tb_writer=None):
     pretrained = weights.endswith('.pt')
     if pretrained:
         with torch_distributed_zero_first(rank):
-            attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
+            weights = attempt_download_github(weights)  # download if not found locally
+        ckpt = torch.load(weights, map_location='cpu')  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc).to(device)  # create
         exclude = ['anchor'] if opt.cfg else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
