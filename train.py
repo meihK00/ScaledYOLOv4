@@ -19,12 +19,13 @@ from tqdm import tqdm
 
 import test  # import test.py to get mAP after each epoch
 from models.yolo import Model
+from models.experimental import attempt_load
 from utils.datasets import create_dataloader
 from utils.general import (
     check_img_size, torch_distributed_zero_first, labels_to_class_weights, plot_labels, check_anchors,
     labels_to_image_weights, compute_loss, plot_images, fitness, strip_optimizer, plot_results,
     get_latest_run, check_git_status, check_file, increment_dir, print_mutation, plot_evolution)
-from utils.google_utils import attempt_download
+from utils.google_utils import attempt_download_github
 from utils.torch_utils import init_seeds, ModelEMA, select_device, intersect_dicts
 
 
@@ -60,8 +61,8 @@ def train(hyp, opt, device, tb_writer=None):
     pretrained = weights.endswith('.pt')
     if pretrained:
         with torch_distributed_zero_first(rank):
-            attempt_download(weights)  # download if not found locally
-        ckpt = torch.load(weights, map_location=device)  # load checkpoint
+            weights = attempt_download_github(weights)  # download if not found locally
+        ckpt = torch.load(weights, map_location='cpu')  # load checkpoint
         model = Model(opt.cfg or ckpt['model'].yaml, ch=3, nc=nc).to(device)  # create
         exclude = ['anchor'] if opt.cfg else []  # exclude keys
         state_dict = ckpt['model'].float().state_dict()  # to FP32
@@ -303,7 +304,7 @@ def train(hyp, opt, device, tb_writer=None):
                 ema.update_attr(model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             final_epoch = epoch + 1 == epochs
             if not opt.notest or final_epoch:  # Calculate mAP
-                results, maps, times = test.test(opt.data,
+                results, maps, _, _ = test.test(opt.data,
                                                  batch_size=batch_size,
                                                  imgsz=imgsz_test,
                                                  save_json=final_epoch and opt.data.endswith(os.sep + 'coco.yaml'),
@@ -370,8 +371,7 @@ def train(hyp, opt, device, tb_writer=None):
     torch.cuda.empty_cache()
     return results
 
-
-if __name__ == '__main__':
+def parse_opt(known = False):
     parser = argparse.ArgumentParser()
     parser.add_argument('--weights', type=str, default='yolov4-p5.pt', help='initial weights path')
     parser.add_argument('--cfg', type=str, default='', help='model.yaml path')
@@ -379,7 +379,7 @@ if __name__ == '__main__':
     parser.add_argument('--hyp', type=str, default='', help='hyperparameters path, i.e. data/hyp.scratch.yaml')
     parser.add_argument('--epochs', type=int, default=300)
     parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs')
-    parser.add_argument('--img-size', nargs='+', type=int, default=[640, 640], help='train,test sizes')
+    parser.add_argument('--img-size', '--img', '--imgsz', nargs='+', type=int, default=[640, 640], help='train,test sizes')
     parser.add_argument('--rect', action='store_true', help='rectangular training')
     parser.add_argument('--resume', nargs='?', const='get_last', default=False,
                         help='resume from given path/last.pt, or most recent run if blank')
@@ -397,9 +397,10 @@ if __name__ == '__main__':
     parser.add_argument('--sync-bn', action='store_true', help='use SyncBatchNorm, only available in DDP mode')
     parser.add_argument('--local_rank', type=int, default=-1, help='DDP parameter, do not modify')
     parser.add_argument('--logdir', type=str, default='runs/', help='logging directory')
-    opt = parser.parse_args()
 
-    # Resume
+    return parser.parse_known_args()[0] if known else parser.parse_args()
+
+def main(opt):
     if opt.resume:
         last = get_latest_run() if opt.resume == 'get_last' else opt.resume  # resume from most recent run
         if last and not opt.weights:
@@ -423,7 +424,7 @@ if __name__ == '__main__':
         assert torch.cuda.device_count() > opt.local_rank
         torch.cuda.set_device(opt.local_rank)
         device = torch.device('cuda', opt.local_rank)
-        dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
+        dist.init_process_group(backend='nccl' if dist.is_nccl_available() else 'gloo')  # distributed backend
         opt.world_size = dist.get_world_size()
         opt.global_rank = dist.get_rank()
         assert opt.batch_size % opt.world_size == 0, '--batch-size must be multiple of CUDA device count'
@@ -517,3 +518,30 @@ if __name__ == '__main__':
         plot_evolution(yaml_file)
         print('Hyperparameter evolution complete. Best results saved as: %s\nCommand to train a new model with these '
               'hyperparameters: $ python train.py --hyp %s' % (yaml_file, yaml_file))
+        
+def run(**kwargs):
+    # Usage: import train; train.run(data='coco128.yaml', imgsz=320, weights='yolov5m.pt')
+    opt = parse_opt(True)
+    for k, v in kwargs.items():
+        setattr(opt, k, v)
+    main(opt)
+    return opt
+
+def train_custom(data,imgsz, weights, hyp, cfg, epochs, batch_size, name, device):
+    opt = parse_opt(True)
+    setattr(opt, "data", data)
+    setattr(opt, "imgsz", imgsz)
+    setattr(opt, "weights", weights)
+    setattr(opt, "hyp", hyp)
+    setattr(opt, "epochs", epochs)
+    setattr(opt, "batch_size", batch_size)
+    setattr(opt, "exist_ok", True)
+    setattr(opt, "device", device)
+    setattr(opt, "resume", False)
+    setattr(opt, "name", name)
+    setattr(opt, "cfg", cfg)
+    main(opt)
+
+if __name__ == '__main__':
+    opt = parse_opt()
+    main(opt)

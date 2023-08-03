@@ -78,6 +78,8 @@ def test(data,
 
     seen = 0
     names = model.names if hasattr(model, 'names') else model.module.names
+    if isinstance(names, (list, tuple)):
+        names = dict(enumerate(names))
     coco91class = coco80_to_coco91_class()
     s = ('%20s' + '%12s' * 6) % ('Class', 'Images', 'Targets', 'P', 'R', 'mAP@.5', 'mAP@.5:.95')
     p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
@@ -203,9 +205,21 @@ def test(data,
     print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
 
     # Print results per class
+    results_per_class = {}
     if verbose and nc > 1 and len(stats):
         for i, c in enumerate(ap_class):
             print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
+            results_per_class[names[c]] = {
+                "precision": round(p[i], 3),
+                "recall": round(r[i], 3)
+            }
+    
+    for key in names.keys():
+        if names[key] not in results_per_class.keys():
+            results_per_class[names[key]] = {
+                "precision": 0.0,
+                "recall": 0.0
+            }
 
     # Print speeds
     t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
@@ -241,10 +255,9 @@ def test(data,
     maps = np.zeros(nc) + map
     for i, c in enumerate(ap_class):
         maps[c] = ap[i]
-    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
+    return (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t, results_per_class
 
-
-if __name__ == '__main__':
+def parse_opt():
     parser = argparse.ArgumentParser(prog='test.py')
     parser.add_argument('--weights', nargs='+', type=str, default='yolov4-p5.pt', help='model.pt path(s)')
     parser.add_argument('--data', type=str, default='data/coco128.yaml', help='*.data path')
@@ -264,7 +277,9 @@ if __name__ == '__main__':
     opt.save_json |= opt.data.endswith('coco.yaml')
     opt.data = check_file(opt.data)  # check file
     print(opt)
+    return opt
 
+def main(opt):
     if opt.task in ['val', 'test']:  # run normally
         test(opt.data,
              opt.weights,
@@ -289,3 +304,7 @@ if __name__ == '__main__':
             np.savetxt(f, y, fmt='%10.4g')  # save
         os.system('zip -r study.zip study_*.txt')
         # plot_study_txt(f, x)  # plot
+
+if __name__ == '__main__':
+    opt = parse_opt()
+    main(opt)
